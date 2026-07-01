@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import areas, auth, stats, tickets, users
+from app.api.routes import areas, auth, devices, stats, tickets, users
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.db.init_db import seed
@@ -28,14 +28,17 @@ def on_startup() -> None:
     upload_dir = Path(settings.UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    tokens = seed()
+    result = seed()
     print("=" * 60)
-    print("Seed listo. Credenciales:")
+    print("Seed listo. Credenciales de usuarios:")
     print("  admin@hospital.local / admin123 (admin)")
     print("  soporte@hospital.local / soporte123 (it)")
-    print("Tokens QR (pegar en /login/qr del frontend):")
-    for email, token in tokens.items():
+    print("\nTokens QR de usuarios médicos:")
+    for email, token in result["users"].items():
         print(f"  {email} -> {token}")
+    print("\nTokens QR de dispositivos:")
+    for label, token in result["devices"].items():
+        print(f"  {label} -> {token}")
     print("=" * 60)
 
 
@@ -44,6 +47,7 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(areas.router, prefix="/api")
+app.include_router(devices.router, prefix="/api")
 app.include_router(tickets.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 

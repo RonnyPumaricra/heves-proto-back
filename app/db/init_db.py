@@ -5,11 +5,23 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.area import Area
+from app.models.device import Device
 from app.models.qr_token import QRToken
 from app.models.user import User
 
 
 AREAS = ["Emergencias", "Pediatría", "Laboratorio", "Administración"]
+
+DEVICES = [
+    ("PC Urgencias 1",    "PC",         "Emergencias",    "Recepción"),
+    ("Impresora Urg.",    "Impresora",  "Emergencias",    "Enfermería"),
+    ("PC Pediatría 1",   "PC",         "Pediatría",      "Consultorio 1"),
+    ("Tablet Pediatría", "Tablet",     "Pediatría",      "Sala de espera"),
+    ("PC Laboratorio",   "PC",         "Laboratorio",    "Mesada principal"),
+    ("Impresora Lab.",   "Impresora",  "Laboratorio",    "Piso 1"),
+    ("PC Admin 1",       "PC",         "Administración", "Oficina principal"),
+    ("Proyector Sala",   "Proyector",  "Administración", "Sala de reuniones"),
+]
 
 
 def _get_or_create_area(db: Session, name: str) -> Area:
@@ -56,6 +68,24 @@ def _ensure_qr_token(db: Session, user: User) -> str:
     return tok.token
 
 
+def _get_or_create_device(
+    db: Session, *, name: str, device_type: str, area: Area, location: str
+) -> Device:
+    d = db.query(Device).filter(Device.name == name).first()
+    if d:
+        return d
+    d = Device(
+        name=name,
+        device_type=device_type,
+        area_id=area.id,
+        location=location,
+        qr_token=uuid.uuid4().hex,
+    )
+    db.add(d)
+    db.flush()
+    return d
+
+
 def seed() -> dict:
     db = SessionLocal()
     try:
@@ -91,11 +121,19 @@ def seed() -> dict:
             area=areas["Pediatría"],
         )
 
-        tokens = {
+        user_tokens = {
             dr_perez.email: _ensure_qr_token(db, dr_perez),
             dra_ramirez.email: _ensure_qr_token(db, dra_ramirez),
         }
+
+        device_tokens = {}
+        for name, dtype, area_name, location in DEVICES:
+            d = _get_or_create_device(
+                db, name=name, device_type=dtype, area=areas[area_name], location=location
+            )
+            device_tokens[f"{name} ({area_name} · {location})"] = d.qr_token
+
         db.commit()
-        return tokens
+        return {"users": user_tokens, "devices": device_tokens}
     finally:
         db.close()

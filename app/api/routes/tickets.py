@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.attachment import Attachment
 from app.models.comment import Comment
+from app.models.device import Device
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.comment import CommentCreate, CommentOut
@@ -42,6 +43,16 @@ def _serialize(ticket: Ticket) -> dict:
             if ticket.assigned_to
             else None
         ),
+        "device": (
+            {
+                "id": ticket.device.id,
+                "name": ticket.device.name,
+                "device_type": ticket.device.device_type,
+                "location": ticket.device.location,
+            }
+            if ticket.device
+            else None
+        ),
         "created_at": ticket.created_at,
         "updated_at": ticket.updated_at,
     }
@@ -60,6 +71,7 @@ def list_tickets(
         joinedload(Ticket.area),
         joinedload(Ticket.reporter),
         joinedload(Ticket.assigned_to),
+        joinedload(Ticket.device),
     )
     if status_:
         q = q.filter(Ticket.status == status_)
@@ -98,12 +110,15 @@ def create_ticket(
 ):
     if payload.urgency not in ("baja", "media", "alta", "critica"):
         raise HTTPException(status_code=400, detail="Urgencia inválida")
+    if not db.get(Device, payload.device_id):
+        raise HTTPException(status_code=400, detail="Dispositivo no encontrado")
     ticket = Ticket(
         title=payload.title,
         description=payload.description,
         urgency=payload.urgency,
         area_id=payload.area_id if payload.area_id is not None else user.area_id,
         reporter_id=user.id,
+        device_id=payload.device_id,
     )
     db.add(ticket)
     db.commit()

@@ -27,7 +27,10 @@ class Ticket(Base):
         nullable=False,
     )
 
+    device_id: Mapped[int | None] = mapped_column(ForeignKey("devices.id"), nullable=True)
+
     area = relationship("Area", back_populates="tickets")
+    device = relationship("Device")
     reporter = relationship("User", foreign_keys=[reporter_id], back_populates="reported_tickets")
     assigned_to = relationship("User", foreign_keys=[assigned_to_id], back_populates="assigned_tickets")
     comments = relationship("Comment", back_populates="ticket", cascade="all, delete-orphan")

@@ -2,12 +2,15 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.device import DeviceBrief
+
 
 class TicketCreate(BaseModel):
     title: str
     description: str
     urgency: str = "media"  # baja|media|alta|critica
     area_id: int | None = None
+    device_id: int
 
 
 class TicketUpdate(BaseModel):
@@ -38,6 +41,7 @@ class TicketOut(BaseModel):
     area_name: str | None = None
     reporter: UserBrief
     assigned_to: UserBrief | None = None
+    device: DeviceBrief | None = None
     created_at: datetime
     updated_at: datetime
 
