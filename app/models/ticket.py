@@ -1,0 +1,34 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+
+
+class Ticket(Base):
+    __tablename__ = "tickets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    urgency: Mapped[str] = mapped_column(String(20), default="media", nullable=False)  # baja|media|alta|critica
+    status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)  # open|in_progress|resolved|closed
+    area_id: Mapped[int | None] = mapped_column(ForeignKey("areas.id"), nullable=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    assigned_to_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    area = relationship("Area", back_populates="tickets")
+    reporter = relationship("User", foreign_keys=[reporter_id], back_populates="reported_tickets")
+    assigned_to = relationship("User", foreign_keys=[assigned_to_id], back_populates="assigned_tickets")
+    comments = relationship("Comment", back_populates="ticket", cascade="all, delete-orphan")
+    attachments = relationship("Attachment", back_populates="ticket", cascade="all, delete-orphan")
