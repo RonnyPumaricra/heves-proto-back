@@ -69,3 +69,17 @@ def update_device(
     db.commit()
     db.refresh(device)
     return _to_out(device)
+
+
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_device(
+    device_id: int,
+    db: Session = Depends(get_db),
+    _=Depends(require_roles("admin")),
+):
+    device = db.get(Device, device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+    device.is_active = False
+    db.commit()
+    return None

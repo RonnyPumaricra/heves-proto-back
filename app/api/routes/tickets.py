@@ -156,6 +156,7 @@ def list_tickets(
     priority: str | None = None,
     area_id: int | None = None,
     assigned_to: int | None = None,
+    reporter_id: int | None = Query(default=None, alias="creadoPor"),
     db: Session = Depends(get_db),
     _=Depends(require_roles("tecnico", "supervisor", "admin")),
 ):
@@ -164,6 +165,7 @@ def list_tickets(
         joinedload(Ticket.reporter),
         joinedload(Ticket.assigned_to),
         joinedload(Ticket.device),
+        joinedload(Ticket.survey),
     )
     if status_:
         q = q.filter(Ticket.status == status_)
@@ -173,6 +175,8 @@ def list_tickets(
         q = q.filter(Ticket.area_id == area_id)
     if assigned_to is not None:
         q = q.filter(Ticket.assigned_to_id == assigned_to)
+    if reporter_id is not None:
+        q = q.filter(Ticket.reporter_id == reporter_id)
     return [_serialize(t) for t in q.order_by(Ticket.created_at.desc()).all()]
 
 
