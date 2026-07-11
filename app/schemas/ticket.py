@@ -8,15 +8,15 @@ from app.schemas.device import DeviceBrief
 class TicketCreate(BaseModel):
     title: str
     description: str
-    urgency: str = "media"  # baja|media|alta|critica
+    priority: str = "media"  # baja|media|alta|critica
     area_id: int | None = None
-    device_id: int
+    device_id: int | None = None
 
 
 class TicketUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
-    urgency: str | None = None
+    priority: str | None = None
     status: str | None = None  # open|in_progress|resolved|closed
     area_id: int | None = None
     assigned_to_id: int | None = None
@@ -35,7 +35,7 @@ class TicketOut(BaseModel):
     id: int
     title: str
     description: str
-    urgency: str
+    priority: str
     status: str
     area_id: int | None
     area_name: str | None = None

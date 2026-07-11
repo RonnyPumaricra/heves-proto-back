@@ -32,7 +32,6 @@ class DeviceOut(DeviceBrief):
     area_id: int | None
     area_name: str | None
     serial_number: str | None
-    qr_token: str
     is_active: bool
 
     class Config:

@@ -13,7 +13,6 @@ class Device(Base):
     area_id: Mapped[int | None] = mapped_column(ForeignKey("areas.id"), nullable=True)
     location: Mapped[str | None] = mapped_column(String(200), nullable=True)
     serial_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    qr_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     area = relationship("Area")

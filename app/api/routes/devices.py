@@ -1,5 +1,3 @@
-import uuid
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -21,7 +19,6 @@ def _to_out(d: Device) -> DeviceOut:
         area_id=d.area_id,
         area_name=d.area.name if d.area else None,
         serial_number=d.serial_number,
-        qr_token=d.qr_token,
         is_active=d.is_active,
     )
 
@@ -38,14 +35,6 @@ def list_devices(
     return [_to_out(d) for d in q.order_by(Device.name).all()]
 
 
-@router.get("/by-qr/{token}", response_model=DeviceOut)
-def get_by_qr(token: str, db: Session = Depends(get_db), _=Depends(get_current_user)):
-    device = db.query(Device).filter(Device.qr_token == token.strip(), Device.is_active.is_(True)).first()
-    if not device:
-        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
-    return _to_out(device)
-
-
 @router.post("", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
 def create_device(
     payload: DeviceCreate,
@@ -58,7 +47,6 @@ def create_device(
         area_id=payload.area_id,
         location=payload.location,
         serial_number=payload.serial_number,
-        qr_token=uuid.uuid4().hex,
     )
     db.add(device)
     db.commit()
@@ -78,21 +66,6 @@ def update_device(
         raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(device, k, v)
-    db.commit()
-    db.refresh(device)
-    return _to_out(device)
-
-
-@router.post("/{device_id}/qr/regenerate", response_model=DeviceOut)
-def regenerate_qr(
-    device_id: int,
-    db: Session = Depends(get_db),
-    _=Depends(require_roles("admin")),
-):
-    device = db.get(Device, device_id)
-    if not device:
-        raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
-    device.qr_token = uuid.uuid4().hex
     db.commit()
     db.refresh(device)
     return _to_out(device)

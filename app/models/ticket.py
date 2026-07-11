@@ -12,7 +12,7 @@ class Ticket(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    urgency: Mapped[str] = mapped_column(String(20), default="media", nullable=False)  # baja|media|alta|critica
+    priority: Mapped[str] = mapped_column(String(20), default="media", nullable=False)  # baja|media|alta|critica
     status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)  # open|in_progress|resolved|closed
     area_id: Mapped[int | None] = mapped_column(ForeignKey("areas.id"), nullable=True)
     reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)

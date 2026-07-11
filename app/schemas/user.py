@@ -6,8 +6,8 @@ from pydantic import BaseModel, EmailStr
 class UserCreate(BaseModel):
     full_name: str
     email: EmailStr
-    role: str  # 'medico' | 'it' | 'admin'
-    password: str | None = None  # required for it/admin; ignored for medico
+    role: str  # 'usuario' | 'tecnico' | 'supervisor' | 'admin'
+    password: str
     area_id: int | None = None
 
 
@@ -31,8 +31,3 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class QRTokenOut(BaseModel):
-    token: str
-    is_active: bool

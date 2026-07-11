@@ -10,7 +10,10 @@ from app.core.database import Base, engine
 from app.db.init_db import seed
 
 
-app = FastAPI(title="Hospital IT Ticket System — Proto", version="0.1.0")
+API_PREFIX = "/api/v1"
+
+
+app = FastAPI(title="Servicedesk Universitario — Proto", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,30 +31,27 @@ def on_startup() -> None:
     upload_dir = Path(settings.UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    result = seed()
+    seed()
     print("=" * 60)
     print("Seed listo. Credenciales de usuarios:")
-    print("  admin@hospital.local / admin123 (admin)")
-    print("  soporte@hospital.local / soporte123 (it)")
-    print("\nTokens QR de usuarios médicos:")
-    for email, token in result["users"].items():
-        print(f"  {email} -> {token}")
-    print("\nTokens QR de dispositivos:")
-    for label, token in result["devices"].items():
-        print(f"  {label} -> {token}")
+    print("  admin@untels.edu.pe / admin123 (admin)")
+    print("  supervisor@untels.edu.pe / supervisor123 (tecnico)")
+    print("  tecnico@untels.edu.pe / tecnico123 (tecnico)")
+    print("  estudiante@untels.edu.pe / estudiante123 (usuario)")
+    print("  docente@untels.edu.pe / docente123 (usuario)")
     print("=" * 60)
 
 
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
-app.include_router(auth.router, prefix="/api")
-app.include_router(users.router, prefix="/api")
-app.include_router(areas.router, prefix="/api")
-app.include_router(devices.router, prefix="/api")
-app.include_router(tickets.router, prefix="/api")
-app.include_router(stats.router, prefix="/api")
+app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(areas.router, prefix=API_PREFIX)
+app.include_router(devices.router, prefix=API_PREFIX)
+app.include_router(tickets.router, prefix=API_PREFIX)
+app.include_router(stats.router, prefix=API_PREFIX)
 
 
-@app.get("/api/health")
+@app.get(f"{API_PREFIX}/health")
 def health() -> dict:
     return {"status": "ok"}

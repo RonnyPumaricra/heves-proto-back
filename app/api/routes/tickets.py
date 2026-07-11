@@ -20,12 +20,16 @@ from app.schemas.ticket import TicketCreate, TicketOut, TicketUpdate
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
 
+VALID_PRIORITIES = ("baja", "media", "alta", "critica")
+VALID_STATUSES = ("open", "in_progress", "resolved", "closed")
+
+
 def _serialize(ticket: Ticket) -> dict:
     return {
         "id": ticket.id,
         "title": ticket.title,
         "description": ticket.description,
-        "urgency": ticket.urgency,
+        "priority": ticket.priority,
         "status": ticket.status,
         "area_id": ticket.area_id,
         "area_name": ticket.area.name if ticket.area else None,
@@ -61,11 +65,11 @@ def _serialize(ticket: Ticket) -> dict:
 @router.get("", response_model=list[TicketOut])
 def list_tickets(
     status_: str | None = Query(default=None, alias="status"),
-    urgency: str | None = None,
+    priority: str | None = None,
     area_id: int | None = None,
     assigned_to: int | None = None,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("it", "admin")),
+    _=Depends(require_roles("tecnico", "admin")),
 ):
     q = db.query(Ticket).options(
         joinedload(Ticket.area),
@@ -75,8 +79,8 @@ def list_tickets(
     )
     if status_:
         q = q.filter(Ticket.status == status_)
-    if urgency:
-        q = q.filter(Ticket.urgency == urgency)
+    if priority:
+        q = q.filter(Ticket.priority == priority)
     if area_id is not None:
         q = q.filter(Ticket.area_id == area_id)
     if assigned_to is not None:
@@ -108,14 +112,14 @@ def create_ticket(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if payload.urgency not in ("baja", "media", "alta", "critica"):
-        raise HTTPException(status_code=400, detail="Urgencia inválida")
-    if not db.get(Device, payload.device_id):
+    if payload.priority not in VALID_PRIORITIES:
+        raise HTTPException(status_code=400, detail="Prioridad inválida")
+    if payload.device_id is not None and not db.get(Device, payload.device_id):
         raise HTTPException(status_code=400, detail="Dispositivo no encontrado")
     ticket = Ticket(
         title=payload.title,
         description=payload.description,
-        urgency=payload.urgency,
+        priority=payload.priority,
         area_id=payload.area_id if payload.area_id is not None else user.area_id,
         reporter_id=user.id,
         device_id=payload.device_id,
@@ -144,7 +148,7 @@ def get_ticket(
     )
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if user.role == "medico" and ticket.reporter_id != user.id:
+    if user.role == "usuario" and ticket.reporter_id != user.id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     return _serialize(ticket)
 
@@ -154,16 +158,16 @@ def update_ticket(
     ticket_id: int,
     payload: TicketUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("it", "admin")),
+    _=Depends(require_roles("tecnico", "admin")),
 ):
     ticket = db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     data = payload.model_dump(exclude_unset=True)
-    if "status" in data and data["status"] not in ("open", "in_progress", "resolved", "closed"):
+    if "status" in data and data["status"] not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail="Status inválido")
-    if "urgency" in data and data["urgency"] not in ("baja", "media", "alta", "critica"):
-        raise HTTPException(status_code=400, detail="Urgencia inválida")
+    if "priority" in data and data["priority"] not in VALID_PRIORITIES:
+        raise HTTPException(status_code=400, detail="Prioridad inválida")
     for k, v in data.items():
         setattr(ticket, k, v)
     db.commit()
@@ -181,7 +185,7 @@ def add_comment(
     ticket = db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if user.role == "medico" and ticket.reporter_id != user.id:
+    if user.role == "usuario" and ticket.reporter_id != user.id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     comment = Comment(ticket_id=ticket_id, author_id=user.id, body=payload.body)
     db.add(comment)
@@ -206,7 +210,7 @@ def list_comments(
     ticket = db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if user.role == "medico" and ticket.reporter_id != user.id:
+    if user.role == "usuario" and ticket.reporter_id != user.id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     comments = (
         db.query(Comment)
@@ -238,7 +242,7 @@ async def upload_attachment(
     ticket = db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if user.role == "medico" and ticket.reporter_id != user.id:
+    if user.role == "usuario" and ticket.reporter_id != user.id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
 
     upload_dir = Path(settings.UPLOAD_DIR) / str(ticket_id)
@@ -266,7 +270,7 @@ def list_attachments(
     ticket = db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
-    if user.role == "medico" and ticket.reporter_id != user.id:
+    if user.role == "usuario" and ticket.reporter_id != user.id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     return [
         {"id": a.id, "filename": a.filename, "path": a.path, "created_at": a.created_at}

@@ -12,19 +12,19 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db), _=Depends(require_roles("it", "admin"))):
+def summary(db: Session = Depends(get_db), _=Depends(require_roles("tecnico", "admin"))):
     by_status = dict(
         db.query(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status).all()
     )
-    by_urgency = dict(
-        db.query(Ticket.urgency, func.count(Ticket.id)).group_by(Ticket.urgency).all()
+    by_priority = dict(
+        db.query(Ticket.priority, func.count(Ticket.id)).group_by(Ticket.priority).all()
     )
     total = db.query(func.count(Ticket.id)).scalar() or 0
-    return {"total": total, "by_status": by_status, "by_urgency": by_urgency}
+    return {"total": total, "by_status": by_status, "by_priority": by_priority}
 
 
 @router.get("/by-area")
-def by_area(db: Session = Depends(get_db), _=Depends(require_roles("it", "admin"))):
+def by_area(db: Session = Depends(get_db), _=Depends(require_roles("tecnico", "admin"))):
     rows = (
         db.query(Area.name, func.count(Ticket.id))
         .outerjoin(Ticket, Ticket.area_id == Area.id)
