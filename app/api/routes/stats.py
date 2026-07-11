@@ -8,6 +8,7 @@ from app.api.deps import require_roles
 from app.core.database import get_db
 from app.models.area import Area
 from app.models.ticket import Ticket
+from app.models.ticket_survey import TicketSurvey
 from app.models.user import User
 from app.services.sla import compute_sla_status, _aware
 
@@ -57,6 +58,18 @@ def summary(
         round(100.0 * sla_buckets["met"] / finished, 1) if finished > 0 else None
     )
 
+    surveys = db.query(TicketSurvey).all()
+    closed_count = by_status.get("CERRADO", 0)
+    distribution = {i: 0 for i in range(1, 6)}
+    for s in surveys:
+        distribution[s.rating] = distribution.get(s.rating, 0) + 1
+    avg_rating = (
+        round(sum(s.rating for s in surveys) / len(surveys), 2) if surveys else None
+    )
+    response_rate = (
+        round(100.0 * len(surveys) / closed_count, 1) if closed_count > 0 else None
+    )
+
     return {
         "total": total,
         "by_status": by_status,
@@ -70,6 +83,12 @@ def summary(
         },
         "avg_response_minutes": _avg(response_times),
         "avg_resolution_minutes": _avg(resolution_times),
+        "csat": {
+            "avg_rating": avg_rating,
+            "response_count": len(surveys),
+            "response_rate_percent": response_rate,
+            "distribution": distribution,
+        },
     }
 
 

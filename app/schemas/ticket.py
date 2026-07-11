@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from app.schemas.device import DeviceBrief
+from app.schemas.survey import TicketSurveyOut
 
 
 class TicketCreate(BaseModel):
@@ -58,6 +59,7 @@ class TicketOut(BaseModel):
     sla_response_due_at: datetime | None = None
     sla_resolution_due_at: datetime | None = None
     sla_status: str  # on_track | at_risk | breached | met
+    survey: TicketSurveyOut | None = None
 
     class Config:
         from_attributes = True

@@ -15,9 +15,11 @@ from app.models.comment import Comment
 from app.models.device import Device
 from app.models.ticket import Ticket
 from app.models.ticket_history import TicketHistory
+from app.models.ticket_survey import TicketSurvey
 from app.models.user import User
 from app.schemas.comment import CommentCreate, CommentOut
 from app.schemas.history import HistoryEntryOut
+from app.schemas.survey import TicketSurveyCreate, TicketSurveyOut
 from app.schemas.ticket import (
     TicketAssign,
     TicketCreate,
@@ -85,6 +87,16 @@ def _serialize(ticket: Ticket) -> dict:
         "sla_response_due_at": ticket.sla_response_due_at,
         "sla_resolution_due_at": ticket.sla_resolution_due_at,
         "sla_status": compute_sla_status(ticket),
+        "survey": (
+            {
+                "ticket_id": ticket.survey.ticket_id,
+                "rating": ticket.survey.rating,
+                "comment": ticket.survey.comment,
+                "created_at": ticket.survey.created_at,
+            }
+            if getattr(ticket, "survey", None)
+            else None
+        ),
     }
 
 
@@ -96,6 +108,7 @@ def _load_ticket(db: Session, ticket_id: int) -> Ticket:
             joinedload(Ticket.reporter),
             joinedload(Ticket.assigned_to),
             joinedload(Ticket.device),
+            joinedload(Ticket.survey),
         )
         .filter(Ticket.id == ticket_id)
         .first()
@@ -175,6 +188,7 @@ def list_my_tickets(
             joinedload(Ticket.reporter),
             joinedload(Ticket.assigned_to),
             joinedload(Ticket.device),
+            joinedload(Ticket.survey),
         )
         .filter(Ticket.reporter_id == user.id)
         .order_by(Ticket.created_at.desc())
@@ -424,6 +438,43 @@ def change_ticket_status(
     db.commit()
     db.refresh(ticket)
     return _serialize(_load_ticket(db, ticket.id))
+
+
+@router.post(
+    "/{ticket_id}/survey",
+    response_model=TicketSurveyOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_survey(
+    ticket_id: int,
+    payload: TicketSurveyCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    if ticket.reporter_id != user.id:
+        raise HTTPException(status_code=403, detail="Solo el reportante puede evaluar")
+    if ticket.status != "CERRADO":
+        raise HTTPException(status_code=400, detail="Solo se puede evaluar un ticket cerrado")
+    if db.get(TicketSurvey, ticket_id) is not None:
+        raise HTTPException(status_code=400, detail="La encuesta ya fue enviada")
+
+    survey = TicketSurvey(
+        ticket_id=ticket_id,
+        rating=payload.rating,
+        comment=payload.comment,
+    )
+    db.add(survey)
+    db.commit()
+    db.refresh(survey)
+    return TicketSurveyOut(
+        ticket_id=survey.ticket_id,
+        rating=survey.rating,
+        comment=survey.comment,
+        created_at=survey.created_at,
+    )
 
 
 @router.post("/{ticket_id}/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)

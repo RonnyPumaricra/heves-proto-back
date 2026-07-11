@@ -40,3 +40,6 @@ class Ticket(Base):
     assigned_to = relationship("User", foreign_keys=[assigned_to_id], back_populates="assigned_tickets")
     comments = relationship("Comment", back_populates="ticket", cascade="all, delete-orphan")
     attachments = relationship("Attachment", back_populates="ticket", cascade="all, delete-orphan")
+    survey = relationship(
+        "TicketSurvey", back_populates="ticket", uselist=False, cascade="all, delete-orphan"
+    )
