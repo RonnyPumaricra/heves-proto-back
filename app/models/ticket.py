@@ -13,7 +13,7 @@ class Ticket(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     priority: Mapped[str] = mapped_column(String(20), default="media", nullable=False)  # baja|media|alta|critica
-    status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)  # open|in_progress|resolved|closed
+    status: Mapped[str] = mapped_column(String(20), default="CREADO", nullable=False)  # CREADO|ASIGNADO|EN_PROCESO|RESUELTO|CERRADO
     area_id: Mapped[int | None] = mapped_column(ForeignKey("areas.id"), nullable=True)
     reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     assigned_to_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -26,6 +26,7 @@ class Ticket(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     device_id: Mapped[int | None] = mapped_column(ForeignKey("devices.id"), nullable=True)
 

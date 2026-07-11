@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
@@ -14,12 +15,16 @@ router = APIRouter(prefix="/users", tags=["users"])
 VALID_ROLES = ("usuario", "tecnico", "supervisor", "admin")
 
 
+class RoleChange(BaseModel):
+    role: str
+
+
 @router.get("", response_model=list[UserOut])
 def list_users(
     role: str | None = None,
     area_id: int | None = None,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("admin")),
+    _=Depends(require_roles("supervisor", "admin")),
 ):
     q = db.query(User)
     if role:
@@ -80,6 +85,24 @@ def update_user(
         data.pop("password", None)
     for k, v in data.items():
         setattr(user, k, v)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.patch("/{user_id}/rol", response_model=UserOut)
+def change_user_role(
+    user_id: int,
+    payload: RoleChange,
+    db: Session = Depends(get_db),
+    _=Depends(require_roles("admin")),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if payload.role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail="Rol inválido")
+    user.role = payload.role
     db.commit()
     db.refresh(user)
     return user

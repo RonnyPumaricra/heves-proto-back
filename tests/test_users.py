@@ -60,6 +60,17 @@ def test_usuario_cannot_list_users(client, seeded):
     assert r.status_code == 403
 
 
+def test_supervisor_can_list_users(client, seeded):
+    token = login(client, "supervisor@untels.edu.pe", "supervisor123")
+    r = client.get(
+        "/api/v1/users",
+        params={"role": "tecnico"},
+        headers=auth_headers(token),
+    )
+    assert r.status_code == 200
+    assert {u["role"] for u in r.json()} == {"tecnico"}
+
+
 def test_admin_lists_users_filtered_by_role(client, seeded):
     token = login(client, "admin@untels.edu.pe", "admin123")
     r = client.get(

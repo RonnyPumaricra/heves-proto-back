@@ -18,7 +18,8 @@ def test_usuario_can_create_ticket_with_priority(client, seeded):
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["priority"] == "alta"
-    assert body["status"] == "open"
+    assert body["status"] == "CREADO"
+    assert body["closed_at"] is None
     assert body["reporter"]["full_name"] == "Estudiante"
     # Área heredada de la del usuario
     assert body["area_name"] == "Aulas"
@@ -82,28 +83,27 @@ def test_admin_can_list_all_tickets(client, seeded):
     assert r.status_code == 200
 
 
-def test_tecnico_can_update_ticket_priority_and_status(client, seeded):
+def test_tecnico_can_update_ticket_priority_via_generic_patch(client, seeded):
     token_est = login(client, "estudiante@untels.edu.pe", "estudiante123")
     created = _create_ticket(client, token_est).json()
 
     token_tec = login(client, "tecnico@untels.edu.pe", "tecnico123")
     r = client.patch(
         f"/api/v1/tickets/{created['id']}",
-        json={"status": "in_progress", "priority": "critica"},
+        json={"priority": "critica"},
         headers=auth_headers(token_tec),
     )
     assert r.status_code == 200
-    assert r.json()["status"] == "in_progress"
     assert r.json()["priority"] == "critica"
 
 
-def test_usuario_cannot_update_ticket(client, seeded):
+def test_usuario_cannot_use_generic_patch(client, seeded):
     token_est = login(client, "estudiante@untels.edu.pe", "estudiante123")
     created = _create_ticket(client, token_est).json()
 
     r = client.patch(
         f"/api/v1/tickets/{created['id']}",
-        json={"status": "in_progress"},
+        json={"priority": "critica"},
         headers=auth_headers(token_est),
     )
     assert r.status_code == 403

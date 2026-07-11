@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -14,14 +15,28 @@ from app.models.device import Device
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.comment import CommentCreate, CommentOut
-from app.schemas.ticket import TicketCreate, TicketOut, TicketUpdate
+from app.schemas.ticket import (
+    TicketAssign,
+    TicketCreate,
+    TicketOut,
+    TicketStatusChange,
+    TicketUpdate,
+)
 
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
 
 VALID_PRIORITIES = ("baja", "media", "alta", "critica")
-VALID_STATUSES = ("open", "in_progress", "resolved", "closed")
+VALID_STATUSES = ("CREADO", "ASIGNADO", "EN_PROCESO", "RESUELTO", "CERRADO")
+
+# Transiciones legales -> qué roles pueden ejecutarlas
+# El técnico asignado y el reportante también se validan aparte.
+STATE_TRANSITIONS = {
+    ("ASIGNADO", "EN_PROCESO"): {"tecnico", "admin"},
+    ("EN_PROCESO", "RESUELTO"): {"tecnico", "admin"},
+    ("RESUELTO", "CERRADO"): {"usuario", "admin"},
+}
 
 
 def _serialize(ticket: Ticket) -> dict:
@@ -59,7 +74,25 @@ def _serialize(ticket: Ticket) -> dict:
         ),
         "created_at": ticket.created_at,
         "updated_at": ticket.updated_at,
+        "closed_at": ticket.closed_at,
     }
+
+
+def _load_ticket(db: Session, ticket_id: int) -> Ticket:
+    ticket = (
+        db.query(Ticket)
+        .options(
+            joinedload(Ticket.area),
+            joinedload(Ticket.reporter),
+            joinedload(Ticket.assigned_to),
+            joinedload(Ticket.device),
+        )
+        .filter(Ticket.id == ticket_id)
+        .first()
+    )
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    return ticket
 
 
 @router.get("", response_model=list[TicketOut])
@@ -69,7 +102,7 @@ def list_tickets(
     area_id: int | None = None,
     assigned_to: int | None = None,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("tecnico", "admin")),
+    _=Depends(require_roles("tecnico", "supervisor", "admin")),
 ):
     q = db.query(Ticket).options(
         joinedload(Ticket.area),
@@ -99,6 +132,7 @@ def list_my_tickets(
             joinedload(Ticket.area),
             joinedload(Ticket.reporter),
             joinedload(Ticket.assigned_to),
+            joinedload(Ticket.device),
         )
         .filter(Ticket.reporter_id == user.id)
         .order_by(Ticket.created_at.desc())
@@ -123,11 +157,12 @@ def create_ticket(
         area_id=payload.area_id if payload.area_id is not None else user.area_id,
         reporter_id=user.id,
         device_id=payload.device_id,
+        status="CREADO",
     )
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
-    return _serialize(ticket)
+    return _serialize(_load_ticket(db, ticket.id))
 
 
 @router.get("/{ticket_id}", response_model=TicketOut)
@@ -136,18 +171,7 @@ def get_ticket(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    ticket = (
-        db.query(Ticket)
-        .options(
-            joinedload(Ticket.area),
-            joinedload(Ticket.reporter),
-            joinedload(Ticket.assigned_to),
-        )
-        .filter(Ticket.id == ticket_id)
-        .first()
-    )
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    ticket = _load_ticket(db, ticket_id)
     if user.role == "usuario" and ticket.reporter_id != user.id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     return _serialize(ticket)
@@ -158,11 +182,9 @@ def update_ticket(
     ticket_id: int,
     payload: TicketUpdate,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("tecnico", "admin")),
+    _=Depends(require_roles("tecnico", "supervisor", "admin")),
 ):
-    ticket = db.get(Ticket, ticket_id)
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    ticket = _load_ticket(db, ticket_id)
     data = payload.model_dump(exclude_unset=True)
     if "status" in data and data["status"] not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail="Status inválido")
@@ -170,9 +192,72 @@ def update_ticket(
         raise HTTPException(status_code=400, detail="Prioridad inválida")
     for k, v in data.items():
         setattr(ticket, k, v)
+    if "status" in data and data["status"] == "CERRADO" and ticket.closed_at is None:
+        ticket.closed_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ticket)
-    return _serialize(ticket)
+    return _serialize(_load_ticket(db, ticket.id))
+
+
+@router.patch("/{ticket_id}/asignacion", response_model=TicketOut)
+def assign_ticket(
+    ticket_id: int,
+    payload: TicketAssign,
+    db: Session = Depends(get_db),
+    _=Depends(require_roles("supervisor", "admin")),
+):
+    ticket = _load_ticket(db, ticket_id)
+    if ticket.status not in ("CREADO", "ASIGNADO", "EN_PROCESO"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede asignar un ticket en estado {ticket.status}",
+        )
+    tecnico = db.get(User, payload.tecnico_id)
+    if not tecnico or tecnico.role != "tecnico" or not tecnico.is_active:
+        raise HTTPException(status_code=400, detail="Técnico inválido")
+    ticket.assigned_to_id = tecnico.id
+    ticket.status = "ASIGNADO"
+    db.commit()
+    db.refresh(ticket)
+    return _serialize(_load_ticket(db, ticket.id))
+
+
+@router.patch("/{ticket_id}/estado", response_model=TicketOut)
+def change_ticket_status(
+    ticket_id: int,
+    payload: TicketStatusChange,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    ticket = _load_ticket(db, ticket_id)
+    new_status = payload.status
+    if new_status not in VALID_STATUSES:
+        raise HTTPException(status_code=400, detail="Status inválido")
+
+    transition = (ticket.status, new_status)
+    allowed_roles = STATE_TRANSITIONS.get(transition)
+    if not allowed_roles:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Transición no permitida: {ticket.status} → {new_status}",
+        )
+    if user.role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="Rol no autorizado para esta transición")
+
+    # Restricciones adicionales por transición
+    if new_status in ("EN_PROCESO", "RESUELTO") and user.role == "tecnico":
+        if ticket.assigned_to_id != user.id:
+            raise HTTPException(status_code=403, detail="Solo el técnico asignado puede cambiar este estado")
+    if new_status == "CERRADO" and user.role == "usuario":
+        if ticket.reporter_id != user.id:
+            raise HTTPException(status_code=403, detail="Solo el reportante puede cerrar su ticket")
+
+    ticket.status = new_status
+    if new_status == "CERRADO" and ticket.closed_at is None:
+        ticket.closed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(ticket)
+    return _serialize(_load_ticket(db, ticket.id))
 
 
 @router.post("/{ticket_id}/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)

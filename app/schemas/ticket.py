@@ -17,9 +17,17 @@ class TicketUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     priority: str | None = None
-    status: str | None = None  # open|in_progress|resolved|closed
+    status: str | None = None  # CREADO|ASIGNADO|EN_PROCESO|RESUELTO|CERRADO
     area_id: int | None = None
     assigned_to_id: int | None = None
+
+
+class TicketAssign(BaseModel):
+    tecnico_id: int
+
+
+class TicketStatusChange(BaseModel):
+    status: str  # ASIGNADO|EN_PROCESO|RESUELTO|CERRADO
 
 
 class UserBrief(BaseModel):
@@ -44,6 +52,7 @@ class TicketOut(BaseModel):
     device: DeviceBrief | None = None
     created_at: datetime
     updated_at: datetime
+    closed_at: datetime | None = None
 
     class Config:
         from_attributes = True
