@@ -4,7 +4,16 @@ from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.models.area import Area
 from app.models.device import Device
+from app.models.sla_policy import SLAPolicy
 from app.models.user import User
+
+
+SLA_DEFAULTS = {
+    "critica": (15, 120),
+    "alta": (60, 480),
+    "media": (240, 1440),
+    "baja": (480, 2880),
+}
 
 
 AREAS = [
@@ -88,10 +97,25 @@ def _get_or_create_device(
     return d
 
 
+def _get_or_create_sla(db: Session, priority: str, response: int, resolution: int) -> SLAPolicy:
+    p = db.get(SLAPolicy, priority)
+    if p:
+        return p
+    p = SLAPolicy(
+        priority=priority, response_minutes=response, resolution_minutes=resolution
+    )
+    db.add(p)
+    db.flush()
+    return p
+
+
 def seed() -> dict:
     db = SessionLocal()
     try:
         areas = {name: _get_or_create_area(db, name) for name in AREAS}
+
+        for priority, (resp, resol) in SLA_DEFAULTS.items():
+            _get_or_create_sla(db, priority, resp, resol)
 
         for full_name, email, password, role, area_name in SEED_USERS:
             _get_or_create_user(

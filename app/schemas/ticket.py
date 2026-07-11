@@ -53,6 +53,11 @@ class TicketOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None = None
+    first_assigned_at: datetime | None = None
+    resolved_at: datetime | None = None
+    sla_response_due_at: datetime | None = None
+    sla_resolution_due_at: datetime | None = None
+    sla_status: str  # on_track | at_risk | breached | met
 
     class Config:
         from_attributes = True

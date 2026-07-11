@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import areas, auth, devices, stats, tickets, users
+from app.api.routes import areas, auth, devices, sla, stats, tickets, users
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.db.init_db import seed
@@ -49,6 +49,7 @@ app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(areas.router, prefix=API_PREFIX)
 app.include_router(devices.router, prefix=API_PREFIX)
 app.include_router(tickets.router, prefix=API_PREFIX)
+app.include_router(sla.router, prefix=API_PREFIX)
 app.include_router(stats.router, prefix=API_PREFIX)
 
 

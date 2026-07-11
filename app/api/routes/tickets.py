@@ -25,6 +25,7 @@ from app.schemas.ticket import (
     TicketStatusChange,
     TicketUpdate,
 )
+from app.services.sla import apply_sla, compute_sla_status
 
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -79,6 +80,11 @@ def _serialize(ticket: Ticket) -> dict:
         "created_at": ticket.created_at,
         "updated_at": ticket.updated_at,
         "closed_at": ticket.closed_at,
+        "first_assigned_at": ticket.first_assigned_at,
+        "resolved_at": ticket.resolved_at,
+        "sla_response_due_at": ticket.sla_response_due_at,
+        "sla_resolution_due_at": ticket.sla_resolution_due_at,
+        "sla_status": compute_sla_status(ticket),
     }
 
 
@@ -194,7 +200,9 @@ def create_ticket(
         reporter_id=user.id,
         device_id=payload.device_id,
         status="CREADO",
+        created_at=datetime.now(timezone.utc),
     )
+    apply_sla(db, ticket)
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
@@ -307,8 +315,16 @@ def update_ticket(
                 new_value=data[field],
             )
 
-    if "status" in data and data["status"] == "CERRADO" and ticket.closed_at is None:
-        ticket.closed_at = datetime.now(timezone.utc)
+    if "priority" in data:
+        apply_sla(db, ticket)
+    if "status" in data:
+        now = datetime.now(timezone.utc)
+        if data["status"] == "ASIGNADO" and ticket.first_assigned_at is None:
+            ticket.first_assigned_at = now
+        if data["status"] == "RESUELTO" and ticket.resolved_at is None:
+            ticket.resolved_at = now
+        if data["status"] == "CERRADO" and ticket.closed_at is None:
+            ticket.closed_at = now
     db.commit()
     db.refresh(ticket)
     return _serialize(_load_ticket(db, ticket.id))
@@ -336,6 +352,8 @@ def assign_ticket(
 
     ticket.assigned_to_id = tecnico.id
     ticket.status = "ASIGNADO"
+    if ticket.first_assigned_at is None:
+        ticket.first_assigned_at = datetime.now(timezone.utc)
 
     _record_change(
         db,
@@ -389,8 +407,11 @@ def change_ticket_status(
 
     old_status = ticket.status
     ticket.status = new_status
+    now = datetime.now(timezone.utc)
+    if new_status == "RESUELTO" and ticket.resolved_at is None:
+        ticket.resolved_at = now
     if new_status == "CERRADO" and ticket.closed_at is None:
-        ticket.closed_at = datetime.now(timezone.utc)
+        ticket.closed_at = now
 
     _record_change(
         db,
